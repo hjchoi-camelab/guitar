@@ -78,5 +78,10 @@ def main():
 
     blktrace_latency(file)
 
+    # file = [input]
+
+    # with Pool(processes=4) as pool:
+    #     pool.map(blktrace_latency, file)
+
 if __name__ == "__main__":
     main()
