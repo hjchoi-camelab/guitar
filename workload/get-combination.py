@@ -19,17 +19,17 @@ combs = list(combinations(items, 4))
 
 for comb in combs:
     filename = '-'.join(comb)
-    f = open(f'/home/hjchoi/git/cxl-sim/script/multi/{filename}.sh', 'w')
-    f.write('set -x\n')
-    for i, workload in enumerate(comb):
-        f.write(f'cd {SPECDIR}/{workload}\n')
-        if i == len(comb)-1:
-            f.write(f'{SPECDIR}/{workload}/run.sh && m5 exit\n')
-        else:
-            f.write(f'{{ {SPECDIR}/{workload}/run.sh; m5 exit; }} &\n')
-    f.close()
-    if random.randint(1, 6) != 6:
-        continue
+    # f = open(f'/home/hjchoi/git/cxl-sim/script/multi/{filename}.sh', 'w')
+    # f.write('set -x\n')
+    # for i, workload in enumerate(comb):
+    #     f.write(f'cd {SPECDIR}/{workload}\n')
+    #     if i == len(comb)-1:
+    #         f.write(f'{SPECDIR}/{workload}/run.sh && m5 exit\n')
+    #     else:
+    #         f.write(f'{{ {SPECDIR}/{workload}/run.sh; m5 exit; }} &\n')
+    # f.close()
+    # if random.randint(1, 6) != 6:
+    #     continue
     print(filename)
 
 

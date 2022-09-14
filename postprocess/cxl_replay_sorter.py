@@ -1,9 +1,13 @@
+#!/usr/bin/env python
+
 import os
 import pandas as pd
 import numpy as np
-  
+
+LIMIT=5
+
 np_list = []
-for (path, dir, files) in os.walk("/home/hjchoi/replay/csv/selected"):
+for (path, dir, files) in os.walk("/home/hjchoi/replay/multi/csv"):
     for f in files:
         if f[-3:] != 'csv':
             continue
@@ -14,8 +18,10 @@ for (path, dir, files) in os.walk("/home/hjchoi/replay/csv/selected"):
                             ascending=[True], 
                             inplace=True)
         # print(csv_data[-50:])
-        np_list.extend(csv_data["Addr Mapping (str)"][:10].values.tolist())
+        np_list.extend(csv_data["Addr Mapping (str)"][:LIMIT].values.tolist())
 np_list = np.array(np_list)
 unique, counts = np.unique(np_list, return_counts=True)
+unique = unique[counts.argsort()[::-1]]
+counts = counts[counts.argsort()[::-1]]
 
 print (np.asarray((unique, counts)).T)
