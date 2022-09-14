@@ -1,4 +1,4 @@
-f = open("./simout", 'r')
+f = open("./cxl_type2_test_logparser/example.log", 'r')
 
 results = set()
 
@@ -10,7 +10,7 @@ while True:
     
     timestamp = int(line[0])
     func_name = line[2]
-    cmd = line[5]
+    cmd = line[4]
 
     results.add(cmd)
 f.close()
