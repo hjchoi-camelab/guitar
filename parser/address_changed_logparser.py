@@ -1,14 +1,16 @@
 import csv
-import numpy as np
-import pandas as pd
 
 f = open("/home/hjchoi/data/git/cxl-sim/m5out/simout", 'r')
+csv_f = open("/home/hjchoi/data/changed_addr.csv", 'w', newline='')
+wr = csv.writer(csv_f)
 
 result = []
 
 COLUMNS = [
     "time", "position"
 ]
+
+wr.writerow(COLUMNS)
 
 lines = [0, 0]
 prev = 0
@@ -24,14 +26,12 @@ while True:
 
     for j in range(34):
         if changed_addr % 2 == 1:
-            result.append(dict(zip(COLUMNS, [i, j])))
+            wr.writerow(([i, j]))
         changed_addr = changed_addr >> 1
 
     prev = prev ^ 1
     cur = cur ^ 1
     i += 1
 
-df = pd.DataFrame(result, columns=COLUMNS)
-df.to_csv(f"changed_addr.csv", index=False)
-
 f.close()
+csv_f.close()
