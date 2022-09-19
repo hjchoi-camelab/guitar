@@ -1,7 +1,7 @@
 import csv
 
-f = open("/root/git/cxl-sim/m5out/debug_cxl_0_1_1_50.log", 'r')
-csv_f = open("/root/tmp/cxl_breakdown.csv", 'w', newline='')
+f = open("/root/git/cxl-sim/m5out/debug_dram_0_1_1_50.log", 'r')
+csv_f = open("/root/tmp/dram_breakdown.csv", 'w', newline='')
 wr = csv.writer(csv_f)
 
 stages_str = [
@@ -9,12 +9,8 @@ stages_str = [
     'l2Brreq',
     'l2rreq',
     'MBrreq',
-    'RPsreq',
-    'T3sreq',
     'Maccess',
     'Mcmd',
-    'T3sres',
-    'RPsres',
     'MBrres',
     'l2rres',
     'l2sres',
@@ -64,13 +60,10 @@ while True:
 for res in results:
     addr = res.pop()
     final_result = [time - res[i-1] for i, time in enumerate(res)][1:]
-    final_result.insert(0, 0)
     final_result.append(res[-1] - res[0])
     final_result.append(addr)
 
     final_results.append(final_result)
-
-wr.writerow(stages_str + ['total', 'addr'])
 
 for res in final_results:
     wr.writerow(res)
