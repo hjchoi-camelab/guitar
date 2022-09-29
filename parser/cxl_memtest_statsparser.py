@@ -19,12 +19,10 @@ wr = csv.writer(csv_f)
 wr.writerow(['Type', 'Addr Mapping (idx)', 'Addr Mapping (str)', 'Ctrl Num', 'Random', 'Read (%)', 'Sim Ticks', 'Read Num', 'Read BW (MiB/s)', \
             'Write Num', 'Write BW (MiB/s)', 'Read Latency (ps)', 'Write Latency (ps)'])
 
-for (path, dir, files) in os.walk("/root/gem5/m5out"):
+for (path, dir, files) in os.walk("/home/hjchoi/result/memtest/cxl"):
     for filename in files:
-        if "stats" not in filename:
+        if filename[:5] != "stats":
             continue
-        # path = "/root/gem5/m5out/0"
-        # filename = "stats_dram_0_4_1_100.txt"
         f = open(f'{path}/{filename}', 'r')
         row = filename[6:-4].split('_')
         addr_mapping_num = addr_mapping_table[int(row[1])]

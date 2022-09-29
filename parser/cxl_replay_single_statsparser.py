@@ -174,6 +174,7 @@ for (path, dir, files) in os.walk(f"/home/hjchoi/result/gem5-ARM-SPEC-CPU2006/re
         row.append(0)                                           # Switch Num
 
         row_list.append(dict(zip(COLUMNS, row)))
+        f.close()
     
     df = pd.DataFrame(row_list, columns=COLUMNS)
     df.to_csv(f"{OUTPUT_DIR}/csv/original/{output_filename}.csv", index=False)
