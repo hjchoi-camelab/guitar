@@ -1,7 +1,7 @@
 import csv
 
-f = open("/root/git/cxl-sim/m5out/debug_dram_0_1_1_50.log", 'r')
-csv_f = open("/root/tmp/dram_breakdown.csv", 'w', newline='')
+f = open("/home/hjchoi/git/cxl-sim/m5out/debug_dram_0_1_1_0.log", 'r')
+csv_f = open("/home/hjchoi/tmp/local_write_breakdown.csv", 'w', newline='')
 wr = csv.writer(csv_f)
 
 stages_str = [
@@ -9,8 +9,7 @@ stages_str = [
     'l2Brreq',
     'l2rreq',
     'MBrreq',
-    'Maccess',
-    'Mcmd',
+    'Msres',
     'MBrres',
     'l2rres',
     'l2sres',
@@ -47,7 +46,9 @@ while True:
     if cmd in delete_cmd:
         continue
 
-    if stage == 'l1rreq':
+    if stage == 'start':
+        continue
+    elif stage == 'l1rreq':
         tmp_results[addr] = [timestamp]
     elif stage == 'end':
         tmp_results[addr].append(timestamp)
@@ -60,10 +61,13 @@ while True:
 for res in results:
     addr = res.pop()
     final_result = [time - res[i-1] for i, time in enumerate(res)][1:]
+    final_result.insert(0, 0)
     final_result.append(res[-1] - res[0])
     final_result.append(addr)
 
     final_results.append(final_result)
+
+wr.writerow(stages_str + ['total', 'addr'])
 
 for res in final_results:
     wr.writerow(res)

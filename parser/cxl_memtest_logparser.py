@@ -1,7 +1,7 @@
 import csv
 
-f = open("/root/git/cxl-sim/m5out/debug_cxl_0_1_1_50.log", 'r')
-csv_f = open("/root/tmp/cxl_breakdown.csv", 'w', newline='')
+f = open("/home/hjchoi/git/cxl-sim/m5out/debug_cxl_0_1_1_100.log", 'r')
+csv_f = open("/home/hjchoi/tmp/cxl_type3_read_breakdown.csv", 'w', newline='')
 wr = csv.writer(csv_f)
 
 stages_str = [
@@ -11,8 +11,7 @@ stages_str = [
     'MBrreq',
     'RPsreq',
     'T3sreq',
-    'Maccess',
-    'Mcmd',
+    'Msres',
     'T3sres',
     'RPsres',
     'MBrres',
@@ -51,7 +50,9 @@ while True:
     if cmd in delete_cmd:
         continue
 
-    if stage == 'l1rreq':
+    if stage == 'start':
+        continue
+    elif stage == 'l1rreq':
         tmp_results[addr] = [timestamp]
     elif stage == 'end':
         tmp_results[addr].append(timestamp)
