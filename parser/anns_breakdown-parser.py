@@ -1,27 +1,21 @@
 import os
+import sys
 import numpy as np
 import pandas as pd
 from math import log
 
-DIRECTORY = '/home/hjchoi/result/anns/sift1M/CXL'
+DIRECTORY = sys.argv[1]
 FILE = 'system.terminal'
 
 COLUMNS = [
+    "vector",
     "pre",
     "graph",
     "distance",
     "insert",
-    "mem waiting",
-]
-
-# query number
-QUERY_NUMS = [
-    2778,
-    1748,
-    1045,
-    499,
-    328,
-    195,
+    "submission",
+    "f2f",
+    "result"
 ]
 
 OUT_COLUMNS = ["search_l", "memory size"]
@@ -35,10 +29,6 @@ for (path, dir, files) in os.walk(DIRECTORY):
         row_list = []
         output = path.split('/')[-1]
 
-        # query number
-        query_num = QUERY_NUMS[int(log(int(output.split('_')[0]), 2)) - 4]
-        cur_query = 0
-
         print(f'{path}/{file}')
         f = open(f'{path}/{file}')
         lines = f.read().splitlines()
@@ -47,11 +37,6 @@ for (path, dir, files) in os.walk(DIRECTORY):
                 continue
             row = line.split(' ')[4:]
             row_list.append(dict(zip(COLUMNS, row)))
-
-            # query number
-            cur_query += 1
-            if cur_query == query_num:
-                break
 
         df = pd.DataFrame(row_list, columns=COLUMNS).astype(int)
         mean = df.mean().values.tolist()
