@@ -1,1 +1,3 @@
 workload/devmem/devmem
+workload/cachable_checker/cachable_checker
+*.o

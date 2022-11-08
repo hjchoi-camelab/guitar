@@ -6,6 +6,7 @@ from math import log
 
 DIRECTORY = sys.argv[1]
 FILE = 'system.terminal'
+POSTFIX = "-FAISS-BREAKDOWN"
 
 COLUMNS = [
     "vector",
@@ -14,11 +15,11 @@ COLUMNS = [
     "distance",
     "insert",
     "submission",
-    "f2f",
+    "waitting4flag",
     "result"
 ]
 
-OUT_COLUMNS = ["search_l", "memory size"]
+OUT_COLUMNS = ["type"]
 OUT_COLUMNS.extend(COLUMNS)
 
 out_row_list = []
@@ -27,7 +28,7 @@ for (path, dir, files) in os.walk(DIRECTORY):
         if file != FILE:
             continue
         row_list = []
-        output = path.split('/')[-1]
+        output = path.split('/')[-1] + POSTFIX
 
         print(f'{path}/{file}')
         f = open(f'{path}/{file}')
@@ -47,13 +48,8 @@ for (path, dir, files) in os.walk(DIRECTORY):
         df.to_excel(f'{DIRECTORY}/{output}.xlsx', index=False)
         f.close()
 
-output = DIRECTORY.split('/')[-1]
+output = DIRECTORY.split('/')[-1] + POSTFIX
 df = pd.DataFrame(out_row_list, columns=OUT_COLUMNS)
-df['search_l'] = df['search_l'].astype(int)
-df.sort_values(["search_l"],
-    axis=0,
-    ascending=[True],
-    inplace=True)
 print(df)
 
 df.to_csv(f'{DIRECTORY}/{output}.csv', index=False)
