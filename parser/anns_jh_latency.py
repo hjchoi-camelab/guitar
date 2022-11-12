@@ -82,9 +82,9 @@ def parsing(file_full_name):
 
     timestamps = []
     if OPTION == 0:
-        output = path.split('/')[-1] + '-DEVICE' + POSTFIX
-    elif OPTION == 1:
         output = path.split('/')[-1] + '-HOST' + POSTFIX
+    elif OPTION == 1:
+        output = path.split('/')[-1] + '-DEVICE' + POSTFIX
     elif OPTION == 2:
         output = path.split('/')[-1] + '-POLL' + POSTFIX
     else:
