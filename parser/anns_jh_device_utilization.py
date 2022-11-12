@@ -11,7 +11,7 @@ from collections import Counter
 from functools import reduce
 from operator import add
 
-# usage "python anns_jh_overlap.py [log directory] [# of the thread] [query depth] [# of the NDP device] [OPTION]"
+# usage "python anns_jh_device_utilization.py [log directory] [# of the thread] [query depth] [# of the NDP device] [# of the NDP units per device]"
 
 DIRECTORY = sys.argv[1]
 if DIRECTORY[-1] == '/':
@@ -19,86 +19,74 @@ if DIRECTORY[-1] == '/':
 THREAD_NUM = int(sys.argv[2])
 QUERY_DEPTH = int(sys.argv[3])
 NDP_NUM = int(sys.argv[4])
-OPTION = int(sys.argv[5])
+UNIT_NUM = int(sys.argv[5])
 
 FILE = 'debug.log'
-POSTFIX = "-OVERLAP"
+POSTFIX = "-DEVICE-UTILIZATION"
 HOST_DEV_ID = 100
 INITIAL_VALUE = -1
 HOST = 0
 DEVICE = 1
 BOTH = 2
 
-HOST_COLUMNS = ["timestamp"]
+COLUMNS = ["timestamp"]
 for i in range(THREAD_NUM):
-    for j in range(QUERY_DEPTH):
-        HOST_COLUMNS.append(f"({i}, {j})")
-
-DEVICE_COLUMNS = ["timestamp"]
-for i in range(THREAD_NUM):
-    for j in range(NDP_NUM):
-        DEVICE_COLUMNS.append(f"({i}, {j})")
+    COLUMNS.append(f"{i}")
 
 def get_init_list(option):
     _tmp_list = []
-    if option:
-        columns = DEVICE_COLUMNS
-    else:
-        columns = HOST_COLUMNS
+    columns = COLUMNS
 
     for column in columns:
-        _tmp_list.append(INITIAL_VALUE)
+        _tmp_list.append(0)
+
     return _tmp_list
 
 
 def get_header(option):
-    if option:
-        return DEVICE_COLUMNS
-    else:
-        return HOST_COLUMNS
+    return COLUMNS
 
 
-def set_host_state(stateManager, timestamp, thread_id, query_index, dev_index, point):
-    stateManager.set_point(timestamp, thread_id, query_index, point)
-
-
-def set_device_state(stateManager, timestamp, thread_id, query_index, dev_index, point):
+def set_state(stateManager, timestamp, thread_id, query_index, dev_index, point):
     stateManager.set_point(timestamp, thread_id, dev_index, point)
 
 
 class StateManager():
-    def __init__(self, thread_num, query_depth, csv_writer, option):
+    def __init__(self, thread_num, query_depth, csv_writer):
         self.thread_num = thread_num
         self.query_depth = query_depth
         self.csv_writer = csv_writer
-        self.states = get_init_list(option)
+        self.states = get_init_list()
 
-        self.csv_writer.writerow(get_header(option))
+        self.csv_writer.writerow(get_header())
 
-    def set_point(self, timestamp, thread_id, query_index, point):
+    def set_point(self, timestamp, thread_id, dev_index, point):
+        update_utilization(thread_id, dev_index, point)
         self.states[0] = timestamp
-        self.states[thread_id * self.query_depth + query_index + 1] = point
+        self.states[thread_id + 1] = get_utilization(thread_id)
         self.csv_writer.writerow(self.states)
 
 
-# point
-SET_START = 0
-QUERY_SET = (SET_START + 1)
-EP_SET = (QUERY_SET + 1)
-RANDOM_START = (EP_SET + 1)
-DISTANCE_START = (RANDOM_START + 1)
-SEND_DOORBELL = (DISTANCE_START + 1)
-RECV_DOORBELL = (SEND_DOORBELL + 1)
-RECV_SQ = (RECV_DOORBELL + 1)
-GET_QUERY_VECTOR_START = (RECV_SQ + 1)
-COMPUTATION_START = GET_QUERY_VECTOR_START+1
-COMPUTATION_END = (COMPUTATION_START + 1)
-CQ_DMA_END = (COMPUTATION_END + 1)
-POLLING_END = (CQ_DMA_END + 1)
-DISTANCE_END = (POLLING_END + 1)
-UPDATE_END = (DISTANCE_END + 1)
-TRAVERSE_END = (UPDATE_END + 1)
-SET_END = (TRAVERSE_END + 1)
+### point ###
+# host
+SET_START = 'set_start'
+QUERY_SET = 'query_set'
+DISTANCE_START = 'distance_star'
+DISTANCE_END = 'distance_end'
+UPDATE_END = 'update_end'
+TRAVERSE_END = 'traverse_end'
+SET_END = 'set_end'
+# device
+SEND_DOORBELL = 'send_doorbell'
+RECV_DOORBELL = 'recv_doorbell'
+RECV_SQ = 'recv_sq'
+GET_QUERY_VECTOR_START = 'get_query_vector_start'
+COMPUTATION_START = 'computation_start'
+ALLOCATE_UNIT = 'allocate_unit'
+DEALLOCATE_UNIT = 'deallocate_unit'
+COMPUTATION_END = 'computation_end'
+CQ_DMA_END = 'cq_dma_end'
+POLLING_END = 'polling_end'
 
 
 DO_OR_NOT = 0

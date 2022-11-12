@@ -44,27 +44,30 @@ def getInitDict():
 OUT_COLUMNS = ["type"]
 OUT_COLUMNS.extend(COLUMNS)
 
+MAGIC_CHARACTERS = ['P', 'Q']
+
 INITIAL_VALUE = -1
 
-# point
-SET_START = 0
-QUERY_SET = (SET_START + 1)
-DISTANCE_START = (QUERY_SET + 1)
-DISTANCE_END = (DISTANCE_START + 1)
-UPDATE_END = (DISTANCE_END + 1)
-TRAVERSE_END = (UPDATE_END + 1)
-SET_END = (TRAVERSE_END + 1)
-
-SEND_DOORBELL = 1000
-RECV_DOORBELL = (SEND_DOORBELL + 1)
-RECV_SQ = (RECV_DOORBELL + 1)
-GET_QUERY_VECTOR_START = (RECV_SQ + 1)
-COMPUTATION_START = (GET_QUERY_VECTOR_START + 1)
-ALLOCATE_UNIT = (COMPUTATION_START + 1)
-DEALLOCATE_UNIT = (ALLOCATE_UNIT + 1)
-COMPUTATION_END = (DEALLOCATE_UNIT + 1)
-CQ_DMA_END = (COMPUTATION_END + 1)
-POLLING_END = (CQ_DMA_END + 1)
+### point ###
+# host
+SET_START = 'set_start'
+QUERY_SET = 'query_set'
+DISTANCE_START = 'distance_start'
+DISTANCE_END = 'distance_end'
+UPDATE_END = 'update_end'
+TRAVERSE_END = 'traverse_end'
+SET_END = 'set_end'
+# device
+SEND_DOORBELL = 'send_doorbell'
+RECV_DOORBELL = 'recv_doorbell'
+RECV_SQ = 'recv_sq'
+GET_QUERY_VECTOR_START = 'get_query_vector_start'
+COMPUTATION_START = 'computation_start'
+ALLOCATE_UNIT = 'allocate_unit'
+DEALLOCATE_UNIT = 'deallocate_unit'
+COMPUTATION_END = 'computation_end'
+CQ_DMA_END = 'cq_dma_end'
+POLLING_END = 'polling_end'
 
 
 # global list
@@ -79,7 +82,10 @@ class OneQuery:
         self.ndp_num = ndp_num
         self.interface = interface
 
+        self.doorbell_counter = 0
+        self.first_doorbell = 0
         self.cq_dma_counter = 0
+        self.polling_counter = 0
         self.timestamps = {
             SET_START: 0,
             QUERY_SET: 0,
@@ -100,7 +106,10 @@ class OneQuery:
         self.ticks = getInitDict()
 
     def one_hop_reset(self):
+        self.doorbell_counter = 0
+        self.first_doorbell = 0
         self.cq_dma_counter = 0
+        self.polling_counter = 0
         self.timestamps = {
             SET_START: 0,
             QUERY_SET: 0,
@@ -124,6 +133,8 @@ class OneQuery:
         self.ticks = getInitDict()
 
     def update_ticks(self, timestamp):
+        assert self.polling_counter == 4
+
         if self.timestamps[SET_START] != 0:
             if self.interface == 'mmio':
                 assert self.timestamps[QUERY_SET] != 0
@@ -139,18 +150,25 @@ class OneQuery:
         else:
             self.ticks["graph"] += self.timestamps[DISTANCE_START] - self.timestamps[UPDATE_END]
 
-        self.ticks["sq entry set"] += self.timestamps[SEND_DOORBELL] - self.timestamps[DISTANCE_START]
-        self.ticks["doorbell"] += self.timestamps[RECV_DOORBELL] - self.timestamps[SEND_DOORBELL]
+        if self.interface == 'dmaone':
+            self.ticks["sq entry set"] += self.first_doorbell - self.timestamps[DISTANCE_START]
+            self.ticks["doorbell"] += self.timestamps[RECV_DOORBELL] - self.first_doorbell
+        else:
+            self.ticks["sq entry set"] += self.timestamps[SEND_DOORBELL] - self.timestamps[DISTANCE_START]
+            self.ticks["doorbell"] += self.timestamps[RECV_DOORBELL] - self.timestamps[SEND_DOORBELL]
+
         if self.interface != 'mmio':
             self.ticks["sq dma"] += self.timestamps[RECV_SQ] - self.timestamps[RECV_DOORBELL]
+
         self.ticks["calculation"] += self.timestamps[COMPUTATION_END] - self.timestamps[COMPUTATION_START]
-        # if self.timestamps[CQ_DMA_END] < self.timestamps[COMPUTATION_END]:
+
         if self.cq_dma_counter != NDP_NUM:
             self.ticks["cq dma"] += self.timestamps[POLLING_END] - self.timestamps[COMPUTATION_END]
         # else:
         else:
             self.ticks["cq dma"] += min(self.timestamps[CQ_DMA_END], self.timestamps[POLLING_END]) - self.timestamps[COMPUTATION_END]
             self.ticks["polling"] += self.timestamps[POLLING_END] - min(self.timestamps[CQ_DMA_END], self.timestamps[POLLING_END])
+
         self.ticks["accumulation"] += self.timestamps[DISTANCE_END] - self.timestamps[POLLING_END]
         self.ticks["update"] += timestamp - self.timestamps[DISTANCE_END]
 
@@ -162,15 +180,24 @@ class OneQuery:
         exit(1)
 
     def insert_timestamp(self, point, timestamp, log_line):
-        if point < SET_START or SET_END < point:
-            self.error(log_line)
-
         if point == UPDATE_END or point == SET_END:
             self.update_ticks(timestamp)
 
+        # increment doorbell counter
+        if point == SEND_DOORBELL:
+            if self.doorbell_counter == 0:
+                self.first_doorbell = timestamp
+            self.doorbell_counter += 1
+
+        # increment CQ DMA counter
         if point == CQ_DMA_END and                                      \
-           self.timestamps[COMPUTATION_END] < timestamp:
+           self.timestamps[COMPUTATION_END] != 0 :
             self.cq_dma_counter += 1
+
+        if point == POLLING_END:
+            self.polling_counter += 1
+
+        # insert timestamp
         self.timestamps[point] = timestamp
 
         if point == SET_END:
@@ -199,8 +226,10 @@ for (path, dir, files) in os.walk(DIRECTORY):
         lines = f.read().splitlines()
         for line in lines:
             row = line.split(': ')
+            if row[-5] not in MAGIC_CHARACTERS:
+                continue
             tick = int(row[0])
-            point = int(row[-1])
+            point = row[-1]
             # dev_index = int(row[-2])
             query_index = int(row[-3])
             thread_id = int(row[-4])
@@ -217,7 +246,7 @@ for (path, dir, files) in os.walk(DIRECTORY):
 
 output = DIRECTORY.split('/')[-1] + POSTFIX
 df = pd.DataFrame(out_row_list, columns=OUT_COLUMNS)
-df.sort_values(["graph"],
+df.sort_values(["type"],
     axis=0,
     ascending=[True],
     inplace=True)

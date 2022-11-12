@@ -50,25 +50,26 @@ DISTANCE = "distance"
 QUERY_VECTOR = "query vector"
 
 
-# point
-SET_START = 0
-QUERY_SET = (SET_START + 1)
-DISTANCE_START = (QUERY_SET + 1)
-DISTANCE_END = (DISTANCE_START + 1)
-UPDATE_END = (DISTANCE_END + 1)
-TRAVERSE_END = (UPDATE_END + 1)
-SET_END = (TRAVERSE_END + 1)
-
-SEND_DOORBELL = 1000
-RECV_DOORBELL = (SEND_DOORBELL + 1)
-RECV_SQ = (RECV_DOORBELL + 1)
-GET_QUERY_VECTOR_START = (RECV_SQ + 1)
-COMPUTATION_START = (GET_QUERY_VECTOR_START + 1)
-ALLOCATE_UNIT = (COMPUTATION_START + 1)
-DEALLOCATE_UNIT = (ALLOCATE_UNIT + 1)
-COMPUTATION_END = (DEALLOCATE_UNIT + 1)
-CQ_DMA_END = (COMPUTATION_END + 1)
-POLLING_END = (CQ_DMA_END + 1)
+### point ###
+# host
+SET_START = 'set_start'
+QUERY_SET = 'query_set'
+DISTANCE_START = 'distance_start'
+DISTANCE_END = 'distance_end'
+UPDATE_END = 'update_end'
+TRAVERSE_END = 'traverse_end'
+SET_END = 'set_end'
+# device
+SEND_DOORBELL = 'send_doorbell'
+RECV_DOORBELL = 'recv_doorbell'
+RECV_SQ = 'recv_sq'
+GET_QUERY_VECTOR_START = 'get_query_vector_start'
+COMPUTATION_START = 'computation_start'
+ALLOCATE_UNIT = 'allocate_unit'
+DEALLOCATE_UNIT = 'deallocate_unit'
+COMPUTATION_END = 'computation_end'
+CQ_DMA_END = 'cq_dma_end'
+POLLING_END = 'polling_end'
 
 
 # global list
@@ -126,7 +127,7 @@ def parsing(file_full_name):
     for line in lines:
         row = line.split(': ')
         timestamp = int(row[0])
-        point = int(row[-1])
+        point = row[-1]
         dev_index = int(row[-2])
         query_index = int(row[-3])
         thread_id = int(row[-4])
@@ -194,8 +195,8 @@ def parsing(file_full_name):
 
                 # log if last
                 if cq_dma_counter == NDP_NUM:
-                    if timestamps[thread_id][query_index][dev_index][COMPUTATION_END] < timestamps[thread_id][query_index][HOST_DEV_ID][POLLING_END]:
-                        latency = timestamps[thread_id][query_index][HOST_DEV_ID][POLLING_END] - timestamps[thread_id][query_index][dev_index][COMPUTATION_END]
+                    if timestamps[thread_id][query_index][dev_index][COMPUTATION_END] < timestamps[thread_id][query_index][dev_index][POLLING_END]:
+                        latency = timestamps[thread_id][query_index][dev_index][POLLING_END] - timestamps[thread_id][query_index][dev_index][COMPUTATION_END]
                     else:
                         latency = timestamp - timestamps[thread_id][query_index][dev_index][COMPUTATION_END]
                     out_list.append(dict(zip(ALL_COLUMNS, [CQ_DMA, timestamp, latency])))
