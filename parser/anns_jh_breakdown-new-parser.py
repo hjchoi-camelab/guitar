@@ -49,21 +49,22 @@ INITIAL_VALUE = -1
 # point
 SET_START = 0
 QUERY_SET = (SET_START + 1)
-EP_SET = (QUERY_SET + 1)
-RANDOM_START = (EP_SET + 1)
-DISTANCE_START = (RANDOM_START + 1)
-SEND_DOORBELL = (DISTANCE_START + 1)
-RECV_DOORBELL = (SEND_DOORBELL + 1)
-RECV_SQ = (RECV_DOORBELL + 1)
-GET_QUERY_VECTOR_START = (RECV_SQ + 1)
-COMPUTATION_START = GET_QUERY_VECTOR_START+1
-COMPUTATION_END = (COMPUTATION_START + 1)
-CQ_DMA_END = (COMPUTATION_END + 1)
-POLLING_END = (CQ_DMA_END + 1)
-DISTANCE_END = (POLLING_END + 1)
+DISTANCE_START = (QUERY_SET + 1)
+DISTANCE_END = (DISTANCE_START + 1)
 UPDATE_END = (DISTANCE_END + 1)
 TRAVERSE_END = (UPDATE_END + 1)
 SET_END = (TRAVERSE_END + 1)
+
+SEND_DOORBELL = 1000
+RECV_DOORBELL = (SEND_DOORBELL + 1)
+RECV_SQ = (RECV_DOORBELL + 1)
+GET_QUERY_VECTOR_START = (RECV_SQ + 1)
+COMPUTATION_START = (GET_QUERY_VECTOR_START + 1)
+ALLOCATE_UNIT = (COMPUTATION_START + 1)
+DEALLOCATE_UNIT = (ALLOCATE_UNIT + 1)
+COMPUTATION_END = (DEALLOCATE_UNIT + 1)
+CQ_DMA_END = (COMPUTATION_END + 1)
+POLLING_END = (CQ_DMA_END + 1)
 
 
 # global list
@@ -200,7 +201,7 @@ for (path, dir, files) in os.walk(DIRECTORY):
             row = line.split(': ')
             tick = int(row[0])
             point = int(row[-1])
-            dev_index = int(row[-2])
+            # dev_index = int(row[-2])
             query_index = int(row[-3])
             thread_id = int(row[-4])
             queries[thread_id][query_index].insert_timestamp(point, tick, line)

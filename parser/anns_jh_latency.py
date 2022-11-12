@@ -39,34 +39,36 @@ INITIAL_VALUE = -1
 DOORBELL = "doorbell"
 SQ_DMA = "SQ DMA"
 QUERY_VECTOR_DMA = "query vector DMA"
-CQ_DMA = "CQ DMA"
 COMPUTATION = "computation"
+CQ_DMA = "CQ DMA"
+POLL = 'polling'
+
 # host
 UPDATE = "update"
 GRAPH = "graph"
 DISTANCE = "distance"
 QUERY_VECTOR = "query vector"
-POLL = 'polling'
 
 
 # point
 SET_START = 0
 QUERY_SET = (SET_START + 1)
-EP_SET = (QUERY_SET + 1)
-RANDOM_START = (EP_SET + 1)
-DISTANCE_START = (RANDOM_START + 1)
-SEND_DOORBELL = (DISTANCE_START + 1)
-RECV_DOORBELL = (SEND_DOORBELL + 1)
-RECV_SQ = (RECV_DOORBELL + 1)
-GET_QUERY_VECTOR_START = (RECV_SQ + 1)
-COMPUTATION_START = GET_QUERY_VECTOR_START+1
-COMPUTATION_END = (COMPUTATION_START + 1)
-CQ_DMA_END = (COMPUTATION_END + 1)
-POLLING_END = (CQ_DMA_END + 1)
-DISTANCE_END = (POLLING_END + 1)
+DISTANCE_START = (QUERY_SET + 1)
+DISTANCE_END = (DISTANCE_START + 1)
 UPDATE_END = (DISTANCE_END + 1)
 TRAVERSE_END = (UPDATE_END + 1)
 SET_END = (TRAVERSE_END + 1)
+
+SEND_DOORBELL = 1000
+RECV_DOORBELL = (SEND_DOORBELL + 1)
+RECV_SQ = (RECV_DOORBELL + 1)
+GET_QUERY_VECTOR_START = (RECV_SQ + 1)
+COMPUTATION_START = (GET_QUERY_VECTOR_START + 1)
+ALLOCATE_UNIT = (COMPUTATION_START + 1)
+DEALLOCATE_UNIT = (ALLOCATE_UNIT + 1)
+COMPUTATION_END = (DEALLOCATE_UNIT + 1)
+CQ_DMA_END = (COMPUTATION_END + 1)
+POLLING_END = (CQ_DMA_END + 1)
 
 
 # global list
@@ -101,14 +103,12 @@ def parsing(file_full_name):
                     COMPUTATION_START: 0,
                     COMPUTATION_END: 0,
                     CQ_DMA_END: 0,
+                    POLLING_END: 0,
                 }
             timestamps[i][j][HOST_DEV_ID] = {
                 SET_START: 0,
                 QUERY_SET: 0,
-                EP_SET: 0,
-                RANDOM_START: 0,
                 DISTANCE_START: 0,
-                POLLING_END: 0,
                 DISTANCE_END: 0,
                 UPDATE_END: 0,
                 TRAVERSE_END: 0,
@@ -120,6 +120,8 @@ def parsing(file_full_name):
     out_list = []
     cq_dma_counter = 0
     cq_dma_timestamp = 0
+    poll_counter = 0
+    poll_timestamp = 0
 
     for line in lines:
         row = line.split(': ')
@@ -180,11 +182,17 @@ def parsing(file_full_name):
             elif point == CQ_DMA_END:
                 latency = timestamp - timestamps[thread_id][query_index][dev_index][COMPUTATION_END]
                 out_list.append(dict(zip(ALL_COLUMNS, [CQ_DMA, timestamp, latency])))
+            elif point == POLLING_END:
+                latency = timestamp - timestamps[thread_id][query_index][dev_index][CQ_DMA_END]
+                out_list.append(dict(zip(ALL_COLUMNS, [POLL, timestamp, latency])))
         elif OPTION == 2:
             if point == CQ_DMA_END:
+                # update counter
                 if cq_dma_counter == NDP_NUM:
                     cq_dma_counter = 0
                 cq_dma_counter += 1
+
+                # log if last
                 if cq_dma_counter == NDP_NUM:
                     if timestamps[thread_id][query_index][dev_index][COMPUTATION_END] < timestamps[thread_id][query_index][HOST_DEV_ID][POLLING_END]:
                         latency = timestamps[thread_id][query_index][HOST_DEV_ID][POLLING_END] - timestamps[thread_id][query_index][dev_index][COMPUTATION_END]
@@ -193,11 +201,18 @@ def parsing(file_full_name):
                     out_list.append(dict(zip(ALL_COLUMNS, [CQ_DMA, timestamp, latency])))
                     cq_dma_timestamp = timestamp
             elif point == POLLING_END:
-                if cq_dma_counter == NDP_NUM:
-                    latency = timestamp - cq_dma_timestamp
-                else:
-                    latency = 0
-                out_list.append(dict(zip(ALL_COLUMNS, [POLL, timestamp, latency])))
+                # update counter
+                if poll_counter == NDP_NUM:
+                    poll_counter = 0
+                poll_counter += 1
+
+                # log if last
+                if poll_counter == NDP_NUM:
+                    if cq_dma_counter == NDP_NUM:
+                        latency = timestamp - cq_dma_timestamp
+                    else:
+                        latency = 0
+                    out_list.append(dict(zip(ALL_COLUMNS, [POLL, timestamp, latency])))
 
             timestamps[thread_id][query_index][dev_index][point] = timestamp
 
