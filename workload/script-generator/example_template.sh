@@ -2,11 +2,23 @@
 
 # substitutions
 DATASET=%{DATASET}
-GRAPH_LOCATION=%{GRAPH_LOCATION}
+SEARCH_L=%{SEARCH_L}
+ENABLE_NDP=%{ENABLE_NDP}
 
 # script to execute
 DATASET_ROOT=/root/anns-dataset
 INDEX_ROOT=/root/git/anns/faiss-experiments/index
+GRAPH_LOCATION=cxl
+EMBEDDING_LOCATION=cxl
+DATASET_MODE=zerocopy
+NUM_QUERY=10
+SHARD=column
+NUM_SHARD=4
+DEVICE_IDS="1 2 3 4"
+NDP_INTERFACE=dma-one
+PREFETCH=
+CACHE_BUDGET_MB=
+QUERY_DEPTH=
 
 mount /dev/sdb1 /root/mnt
 
@@ -22,23 +34,10 @@ mount /dev/sdb1 /root/mnt
   --num-shard ${NUM_SHARD} \
   --device-ids ${DEVICE_IDS} \
   ${ENABLE_NDP} \
+  ${NDP_INTERFACE} \
+  ${PREFETCH} \
+  ${CACHE_BUDGET_MB} \
   ${QUERY_DEPTH} \
-  ${NDP_INTERFACE}
 
-
-/root/mnt/test_nsg \
-    /root/anns-dataset/sift10K \
-    /root/git/anns/faiss-experiments/index \
-    --dataset-mode zerocopy \
-    --embedding-location cxl \
-    --graph-location cxl \
-    --device-name jh \
-    --search-l 16 \
-    --num-query 32 \
-    --shard none \
-    --num-shard 1 \
-    --device-ids 0
-
-umount /root/mnt
 
 m5 exit

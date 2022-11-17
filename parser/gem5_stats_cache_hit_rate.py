@@ -3,6 +3,7 @@ import sys
 import csv
 import traceback
 import pdb
+import re
 import numpy as np
 import pandas as pd
 from math import log
@@ -13,62 +14,92 @@ from multiprocessing import Pool
 DIRECTORY = sys.argv[1]
 if DIRECTORY[-1] == '/':
     DIRECTORY = DIRECTORY[:-1]
+NDP_NUM = int(sys.argv[2])
 
 FILE = 'stats.txt'
-POSTFIX = '-CACHE-HIT'
+POSTFIX = '-STATS'
 
-def makeItInt(storage, output_column, value):
+
+def make_it_int(storage, output_column, value):
     storage[output_column] = int(value)
+
+
+def divide_it_by_sim_ticks(storage, output_column, value):
+    storage[output_column] = int(value) / storage['total ticks']
+
 
 STATS = [
     {
-        "name": 'finalTick',
-        "callback": makeItInt,
-        "output_column": 'timestamp'
-    },
-    {
-        "name": 'system.cpu.dcache.overallAccesses::total',
-        "callback": makeItInt,
-        "output_column": 'L1 accesses'
-    },
-    {
-        "name": 'system.l2.overallAccesses::total',
-        "callback": makeItInt,
-        "output_column": 'L2 accesses'
-    },
-    {
-        "name": 'system.l2.overallMisses::total',
-        "callback": makeItInt,
-        "output_column": 'L2 misses'
-    },
-    {
-        "name": 'system.l2.roiHits',
-        "callback": makeItInt,
-        "output_column": 'ROI hits'
-    },
-    {
-        "name": 'system.l2.roiMisses',
-        "callback": makeItInt,
-        "output_column": 'ROI misses'
-    },
-    {
-        "name": 'system.l2.roiAccesses',
-        "callback": makeItInt,
-        "output_column": 'ROI accesses'
+        "name": r'finalTick',
+        "callback": make_it_int,
+        "output_column": 'timestamp',
+        "many": False,
+    }, {
+        "name": r'system\.switch_cpus(\d*)\.numCycles',
+        "callback": make_it_int,
+        "output_column": 'CPU total cycles',
+        "many": False,
+    }, {
+        "name": r'system\.switch_cpus(\d*)\.idleCycles',
+        "callback": make_it_int,
+        "output_column": 'CPU idle cycles',
+        "many": False,
+    }, {
+        "name": r'simTicks',
+        "callback": make_it_int,
+        "output_column": 'total ticks',
+        "many": False,
+    }, {
+        "name": r'system\.cxl_type3s(\d*)\.busyTick',
+        "callback": divide_it_by_sim_ticks,
+        "output_column": ' busy ticks',
+        "many": True,
+    }, {
+        "name": r'system\.cxl_type3s(\d)*\.idleTick',
+        "callback": divide_it_by_sim_ticks,
+        "output_column": ' idle ticks',
+        "many": True,
+    }, {
+        "name": r'system\.l2\.roiHits',
+        "callback": make_it_int,
+        "output_column": 'ROI hits',
+        "many": False,
+    }, {
+        "name": r'system\.l2\.roiMisses',
+        "callback": make_it_int,
+        "output_column": 'ROI misses',
+        "many": False,
+    }, {
+        "name": r'system\.l2\.roiAccesses',
+        "callback": make_it_int,
+        "output_column": 'ROI accesses',
+        "many": False,
     },
 ]
 
 def getColumns():
     columns = []
     for stat in STATS:
-        columns.append(stat['output_column'])
+        if stat['many']:
+            for i in range(NDP_NUM):
+                output_column = str(i) + stat['output_column']
+                columns.append(output_column)
+        else:
+            output_column = stat['output_column']
+            columns.append(output_column)
 
     return columns
 
 
 def initDict(_dict):
     for stat in STATS:
-        _dict[stat['output_column']] = 0
+        if stat['many']:
+            for i in range(NDP_NUM):
+                output_column = str(i) + stat['output_column']
+                _dict[output_column] = 0
+        else:
+            output_column = stat['output_column']
+            _dict[output_column] = 0
 
 
 def parsing(file_full_name):
@@ -94,7 +125,13 @@ def parsing(file_full_name):
 
             row = []
             for stat in STATS:
-                row.append(tmp_dict[stat['output_column']])
+                if stat['many']:
+                    for i in range(NDP_NUM):
+                        output_column = str(i) + stat['output_column']
+                        row.append(tmp_dict[output_column])
+                else:
+                    output_column = stat['output_column']
+                    row.append(tmp_dict[output_column])
             wr.writerow(row)
             initDict(tmp_dict)
         if line == '':
@@ -104,11 +141,16 @@ def parsing(file_full_name):
         name = row[0]
 
         for stat in STATS:
-            if name != stat['name']:
+            m = re.match(stat['name'], name)
+            if not m:
                 continue
 
+            if stat['many']:
+                output_column = m.group(1) + stat['output_column']
+            else:
+                output_column = stat['output_column']
             value = row[1]
-            stat['callback'](tmp_dict, stat['output_column'], value)
+            stat['callback'](tmp_dict, output_column, value)
             break
 
     f.close()
@@ -126,5 +168,5 @@ if __name__ == '__main__':
             file_full_names.append((path, file))
 
     # multiprocessing
-    with Pool(2) as p:
+    with Pool(18) as p:
         p.map(parsing, file_full_names)

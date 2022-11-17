@@ -21,6 +21,10 @@ QUERY_DEPTH = int(sys.argv[3])
 NDP_NUM = int(sys.argv[4])
 UNIT_NUM = int(sys.argv[5])
 
+if THREAD_NUM != 1:
+    print("This script is for single-core")
+    exit(1)
+
 FILE = 'debug.log'
 POSTFIX = "-DEVICE-UTILIZATION"
 HOST_DEV_ID = 100
@@ -30,10 +34,10 @@ DEVICE = 1
 BOTH = 2
 
 COLUMNS = ["timestamp"]
-for i in range(THREAD_NUM):
+for i in range(NDP_NUM):
     COLUMNS.append(f"{i}")
 
-def get_init_list(option):
+def get_init_list():
     _tmp_list = []
     columns = COLUMNS
 
@@ -43,35 +47,56 @@ def get_init_list(option):
     return _tmp_list
 
 
-def get_header(option):
+def get_header():
     return COLUMNS
 
 
-def set_state(stateManager, timestamp, thread_id, query_index, dev_index, point):
-    stateManager.set_point(timestamp, thread_id, dev_index, point)
+def set_state(stateManager, timestamp, dev_index, point):
+    stateManager.set_point(timestamp, dev_index, point)
 
 
 class StateManager():
-    def __init__(self, thread_num, query_depth, csv_writer):
-        self.thread_num = thread_num
+    def __init__(self, query_depth, ndp_num, units_per_device, csv_writer):
         self.query_depth = query_depth
+        self.ndp_num = ndp_num
+        self.units_per_device = units_per_device
+        self.utilizations = []
+        self.allocated_unit_nums = []
         self.csv_writer = csv_writer
         self.states = get_init_list()
 
+        for i in range(ndp_num):
+            self.utilizations.append(0)
+            self.allocated_unit_nums.append(0)
         self.csv_writer.writerow(get_header())
 
-    def set_point(self, timestamp, thread_id, dev_index, point):
-        update_utilization(thread_id, dev_index, point)
+
+    def update_utilization(self, dev_index, allocated):
+        if allocated:
+            value = 1
+        else:
+            value = -1
+        self.allocated_unit_nums[dev_index] += value
+        self.utilizations[dev_index] = self.allocated_unit_nums[dev_index] / self.units_per_device
+
+
+    def get_utilization(self, dev_index):
+        return self.utilizations[dev_index]
+
+
+    def set_point(self, timestamp, dev_index, point):
+        self.update_utilization(dev_index, point == ALLOCATE_UNIT)
         self.states[0] = timestamp
-        self.states[thread_id + 1] = get_utilization(thread_id)
+        self.states[dev_index + 1] = self.get_utilization(dev_index)
         self.csv_writer.writerow(self.states)
+
 
 
 ### point ###
 # host
 SET_START = 'set_start'
 QUERY_SET = 'query_set'
-DISTANCE_START = 'distance_star'
+DISTANCE_START = 'distance_start'
 DISTANCE_END = 'distance_end'
 UPDATE_END = 'update_end'
 TRAVERSE_END = 'traverse_end'
@@ -91,25 +116,25 @@ POLLING_END = 'polling_end'
 
 DO_OR_NOT = 0
 CALLBACK = 1
-POINTS = [
-    [HOST, set_host_state],         # SET_START
-    [HOST, set_host_state],         # QUERY_SET
-    [INITIAL_VALUE, None],          # EP_SET
-    [INITIAL_VALUE, None],          # RANDOM_START
-    [HOST, set_host_state],         # DISTANCE_START
-    [DEVICE, set_device_state],     # SEND_DOORBELL
-    [DEVICE, set_device_state],     # RECV_DOORBELL
-    [DEVICE, set_device_state],     # RECV_SQ
-    [DEVICE, set_device_state],     # GET_QUERY_VECTOR_START
-    [DEVICE, set_device_state],     # COMPUTATION_START
-    [DEVICE, set_device_state],     # COMPUTATION_END
-    [DEVICE, set_device_state],     # CQ_DMA_END
-    [INITIAL_VALUE, None],          # POLLING_END
-    [HOST, set_host_state],         # DISTANCE_END
-    [HOST, set_host_state],         # UPDATE_END
-    [HOST, set_host_state],         # TRAVERSE_END
-    [HOST, set_host_state],         # SET_END
-]
+POINTS = {
+    SET_START: None,
+    QUERY_SET: None,
+    DISTANCE_START: None,
+    DISTANCE_END: None,
+    UPDATE_END: None,
+    TRAVERSE_END: None,
+    SET_END: None,
+    SEND_DOORBELL: None,
+    RECV_DOORBELL: None,
+    RECV_SQ: None,
+    GET_QUERY_VECTOR_START: None,
+    COMPUTATION_START: None,
+    ALLOCATE_UNIT: set_state,
+    DEALLOCATE_UNIT: set_state,
+    COMPUTATION_END: None,
+    CQ_DMA_END: None,
+    POLLING_END: None,
+}
 
 
 # global list
@@ -119,32 +144,26 @@ out_row_list = []
 def parsing(file_full_name):
     path = file_full_name[0]
     file = file_full_name[1]
-    if OPTION:
-        option = '-DEVICE'
-    else:
-        option = '-HOST'
-    output = path.split('/')[-1] + option + POSTFIX
+    output = path.split('/')[-1] + POSTFIX
 
     print(f'{path}/{file}')
     f = open(f'{path}/{file}')
     # csv_f = open(f'{DIRECTORY}/{output}.csv', 'w', newline='')
-    csv_f = open(f'./{output}.csv', 'w', newline='')
+    csv_f = open(f'{DIRECTORY}/{output}.csv', 'w', newline='')
     wr = csv.writer(csv_f)
-    state_manager = StateManager(THREAD_NUM, QUERY_DEPTH, wr, OPTION)
+    state_manager = StateManager(QUERY_DEPTH, NDP_NUM, UNIT_NUM, wr)
 
     lines = f.read().splitlines()
     for line in lines:
         row = line.split(': ')
         timestamp = int(row[0])
-        point = int(row[-1])
+        point = row[-1]
         dev_index = int(row[-2])
-        query_index = int(row[-3])
-        thread_id = int(row[-4])
 
-        if POINTS[point][DO_OR_NOT] != OPTION:
+        if not POINTS[point]:
             continue
 
-        POINTS[point][CALLBACK](state_manager, timestamp, thread_id, query_index, dev_index, point)
+        POINTS[point](state_manager, timestamp, dev_index, point)
 
     print(output)
     csv_f.close()
@@ -160,5 +179,5 @@ if __name__ == '__main__':
             file_full_names.append((path, file))
 
     # multiprocessing
-    with Pool(12) as p:
+    with Pool(18) as p:
         p.map(parsing, file_full_names)

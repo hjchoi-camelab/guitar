@@ -2,3 +2,5 @@ workload/devmem/devmem
 workload/cachable_checker/cachable_checker
 *.o
 .vscode
+__pycache__
+workload/script-generator/scripts
