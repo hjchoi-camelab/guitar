@@ -1,8 +1,12 @@
 import os
-from script_generator import *
+import sys
 from pathlib import Path
 
-DATASET = ["sift1M", "gist1M"]
+sys.path.insert(0, '../')
+from script_generator import *
+
+# DATASET = ["sift1M", "gist1M"]
+DATASET = ["sift1M"]
 SEARCH_L = ["16", "32", "64", "128", "256", "512"]
 TYPE = ["base", "cache", "ndp", "nearest", "disk", "distributed", "infinite"]
 

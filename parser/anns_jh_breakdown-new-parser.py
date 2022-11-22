@@ -11,17 +11,19 @@ from functools import reduce
 from operator import add
 from multiprocessing import Pool
 
+# directory name: {dataset}_{search-l}_{type}_{# of the shard}
 # usage "python anss_jh_breakdown-parser.py [log directory] [# of the thread] [query depth] [# of the NDP device]"
 
 OUTLIER_THRESHOLD = 50000000
+# OUTLIER_THRESHOLD = 20000000
 
 DIRECTORY = sys.argv[1]
 if DIRECTORY[-1] == '/':
     DIRECTORY = DIRECTORY[:-1]
 THREAD_NUM = int(sys.argv[2])
 QUERY_DEPTH = int(sys.argv[3])
-NDP_NUM = int(sys.argv[4])
-QUERY_NUM = int(sys.argv[5])
+QUERY_NUM = int(sys.argv[4])
+# NDP_NUM = int(sys.argv[4])
 if len(sys.argv) == 7:
     TYPE = sys.argv[6]
 else:
@@ -59,9 +61,8 @@ COLUMNS = [
     "cq dma",
     "polling",
     "accumulation",
-    "distributed_update",
-    "network_memcpy",
-    "network_link",
+    "merge",
+    "network",
     "total",
 ]
 
@@ -115,7 +116,7 @@ DISTRIBUTED_SLAVE_RECV = 'distributed_slave_recv'
 DISTRIBUTED_SLAVE_SEND = 'distributed_slave_send'
 DISTRIBUTED_MASTER_RECV = 'distributed_master_recv'
 DISTRIBUTED_POSTPROCESSING = 'distributed_postprocessing'
-DISTRIBUTED_MERGE_END = 'distributed_merge_end'
+DISTRIBUTED_MERGE_END = 'distributed_end'
 
 DISTRIBUTED_POINT_LIST = [
     DISTRIBUTED_MASTER_SEND,
@@ -226,8 +227,8 @@ class OneQuery:
                 self.ticks["cq dma"] += min(self.timestamps[CQ_DMA_END], self.timestamps[POLLING_END]) - self.timestamps[COMPUTATION_END]
                 if (self.timestamps[POLLING_END] - min(self.timestamps[CQ_DMA_END], self.timestamps[POLLING_END]) < OUTLIER_THRESHOLD):
                     self.ticks["polling"] += self.timestamps[POLLING_END] - min(self.timestamps[CQ_DMA_END], self.timestamps[POLLING_END])
-                # if self.timestamps[POLLING_END] - min(self.timestamps[CQ_DMA_END], self.timestamps[POLLING_END]):
-                #     print(f'{timestamp}: {self.timestamps[POLLING_END]}, {self.timestamps[CQ_DMA_END]}, {self.timestamps[POLLING_END] - self.timestamps[CQ_DMA_END]}')
+                if OUTLIER_THRESHOLD < self.timestamps[POLLING_END] - min(self.timestamps[CQ_DMA_END], self.timestamps[POLLING_END]):
+                    print(f'{timestamp}: {self.timestamps[POLLING_END] - self.timestamps[CQ_DMA_END]}')
 
             if  self.timestamps[DISTANCE_START] < self.first_doorbell:
                 self.ticks["accumulation"] += self.timestamps[DISTANCE_END] - self.timestamps[POLLING_END]
@@ -276,18 +277,18 @@ class OneQuery:
             self.query_reset()
 
 
-def update_distributed_tick(timestamp, point, distributed, network_memcpy, network_update):
+def update_distributed_tick(timestamp, point, distributed, network_memcpy, network_update, network_merge):
     if point == DISTRIBUTED_POSTPROCESSING:
         network_memcpy += distributed[DISTRIBUTED_SLAVE_RECV] - distributed[DISTRIBUTED_MASTER_SEND]
         network_memcpy += distributed[DISTRIBUTED_MASTER_RECV] - distributed[DISTRIBUTED_SLAVE_SEND]
         network_update += timestamp - distributed[DISTRIBUTED_MASTER_RECV]
     elif point == DISTRIBUTED_MERGE_END:
-        network_update += timestamp - distributed[DISTRIBUTED_POSTPROCESSING]
+        network_merge += timestamp - distributed[DISTRIBUTED_POSTPROCESSING]
     else:
         print("Wrong point")
         exit(1)
 
-    return (network_memcpy, network_update)
+    return (network_memcpy, network_update, network_merge)
 
 
 def parsing(file_full_name):
@@ -298,7 +299,8 @@ def parsing(file_full_name):
     if TYPE:
         type = TYPE
     else:
-        type = setting.split('_')[-1]
+        type = setting.split('_')[-2]
+
     if type not in TYPE_LIST:
         print(f"wrong type: {type}")
         exit(1)
@@ -308,14 +310,15 @@ def parsing(file_full_name):
         query_depth = 1
 
     if type in NDP_LIST:
-        ndp_num = NDP_NUM
+        ndp_num = int(setting.split('_')[-1])
     elif type == "distributed":
-        ndp_num = NDP_NUM + 1
+        ndp_num = int(setting.split('_')[-1])
     else:
         ndp_num = 0
 
     # get end-to-end latency
     start_tick = 0
+    end_tick = 0
     end_to_end = 0
     is_first = True
 
@@ -338,6 +341,7 @@ def parsing(file_full_name):
         DISTRIBUTED_POSTPROCESSING: 0,
         DISTRIBUTED_MERGE_END: 0,
     }
+    distributed_merge = 0
     distributed_update = 0
     network_memcpy = 0
     network_link = 0
@@ -372,7 +376,7 @@ def parsing(file_full_name):
         # distributed
         if point in DISTRIBUTED_POINT_LIST:
             if point == DISTRIBUTED_POSTPROCESSING or point == DISTRIBUTED_MERGE_END:
-                (network_memcpy, distributed_update) = update_distributed_tick(tick, point, distributed, network_memcpy, distributed_update)
+                (network_memcpy, distributed_update, distributed_merge) = update_distributed_tick(tick, point, distributed, network_memcpy, distributed_update, distributed_merge)
             distributed[point] = tick
             continue
 
@@ -381,7 +385,11 @@ def parsing(file_full_name):
         if point == SET_START and is_first:
             start_tick = tick
             is_first = False
-    end_to_end = tick - start_tick
+
+        if point == SET_END:
+            end_tick = tick
+
+    end_to_end = end_tick - start_tick
 
 
     # get accuracy
@@ -401,15 +409,16 @@ def parsing(file_full_name):
 
     # distributed
     if type == 'distributed':
-        end_to_end += distributed_update + network_memcpy + network_link
-        end_to_end //= 5
+        end_to_end += distributed_update + network_memcpy
+        end_to_end //= ndp_num
+        end_to_end += network_link + distributed_merge
+        distributed_merge //= QUERY_NUM
         distributed_update //= (ndp_num * QUERY_NUM)
         network_memcpy //= (ndp_num * QUERY_NUM)
-        network_link //= (ndp_num * QUERY_NUM)
+        network_link //= QUERY_NUM
         df['total'] += distributed_update + network_memcpy + network_link
-        df['distributed_update'] = distributed_update
-        df['network_memcpy'] = network_memcpy
-        df['network_link'] = network_link
+        df['merge'] = distributed_merge + distributed_update
+        df['network'] = network_memcpy + network_link
 
     # generate mean
     mean = df.mean().values.tolist()
@@ -432,7 +441,7 @@ if __name__ == '__main__':
             file_full_names.append((path, file))
 
     # multiprocessing
-    with Pool(12) as p:
+    with Pool(1) as p:
         means = p.map(parsing, file_full_names)
 
     output = DIRECTORY.split('/')[-1] + POSTFIX

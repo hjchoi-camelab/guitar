@@ -1,7 +1,7 @@
 import csv
 
-f = open("/home/hjchoi/git/cxl-sim/m5out/debug_cxl_0_1_1_100.log", 'r')
-csv_f = open("/home/hjchoi/tmp/cxl_type3_read_breakdown.csv", 'w', newline='')
+f = open("/root/git/anns/jh/m5out/dram_latency/debug_dram_0_1_1_100.log", 'r')
+csv_f = open("/root/tmp/dram_read_breakdown.csv", 'w', newline='')
 wr = csv.writer(csv_f)
 
 stages_str = [

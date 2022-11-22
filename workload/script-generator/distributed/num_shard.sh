@@ -11,12 +11,13 @@ NEAREST_LIST=( "nearest" )
 DATASET=%{DATASET}
 SEARCH_L=%{SEARCH_L}
 TYPE=%{TYPE}
+THE_NUM_OF_SHARD=%{NUM_SHARD}
 
 echo ${DATASET}_${SEARCH_L}_${TYPE}
 
-BUILD_R=""
-BUILD_L=""
-BUILD_C=""
+BUILD_R="--build-r 100"
+BUILD_L="--build-l 60"
+BUILD_C="--build-c 500"
 if [ "${DATASET}" == "gist1M" ]
 then
   BUILD_R="--build-r 70"
@@ -55,7 +56,7 @@ then
   GRAPH_LOCATION="--graph-location host"
   EMBEDDING_LOCATION="--embedding-location host"
   SHARD="--shard distributed"
-  NUM_SHARD="--num-shard 5"
+  NUM_SHARD="--num-shard ${THE_NUM_OF_SHARD}"
 fi
 
 # enable cxl
