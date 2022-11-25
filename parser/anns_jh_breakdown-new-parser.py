@@ -12,7 +12,7 @@ from operator import add
 from multiprocessing import Pool
 
 # directory name: {dataset}_{search-l}_{type}_{# of the shard}
-# usage "python anss_jh_breakdown-parser.py [log directory] [# of the thread] [query depth] [# of the NDP device]"
+# usage "python anss_jh_breakdown-parser.py [log directory] [# of the thread] [query depth] [# of the query]"
 
 OUTLIER_THRESHOLD = 50000000
 # OUTLIER_THRESHOLD = 20000000
@@ -25,7 +25,7 @@ QUERY_DEPTH = int(sys.argv[3])
 QUERY_NUM = int(sys.argv[4])
 # NDP_NUM = int(sys.argv[4])
 if len(sys.argv) == 7:
-    TYPE = sys.argv[6]
+    TYPE = sys.argv[5]
 else:
     TYPE = ""
 
@@ -47,7 +47,6 @@ NDP_LIST = [
     'ndp',
     'cache',
     'nearest',
-    'infinite',
 ]
 
 COLUMNS = [
@@ -64,6 +63,7 @@ COLUMNS = [
     "merge",
     "network",
     "total",
+    "submission",
 ]
 
 RDMA_PATTERN = r'([\d \+]* \d*)(?= B)'
@@ -95,6 +95,7 @@ SET_START = 'set_start'
 QUERY_SET = 'query_set'
 DISTANCE_START = 'distance_start'
 SEND_DOORBELL_DONE = 'send_doorbell_done'
+POLLING_END_DONE = 'polling_end_done'
 DISTANCE_END = 'distance_end'
 UPDATE_END = 'update_end'
 TRAVERSE_END = 'traverse_end'
@@ -127,11 +128,6 @@ DISTRIBUTED_POINT_LIST = [
     DISTRIBUTED_MERGE_END,
 ]
 
-
-# global list
-out_row_list = []
-
-
 class OneQuery:
     def __init__(self, type, thread_id, query_index, ndp_num=0, interface="dmaone"):
         self.type = type
@@ -149,6 +145,7 @@ class OneQuery:
             QUERY_SET: 0,
             DISTANCE_START: 0,
             SEND_DOORBELL: 0,
+            SEND_DOORBELL_DONE: 0,
             RECV_DOORBELL: 0,
             RECV_SQ: 0,
             GET_QUERY_VECTOR_START: 0,
@@ -156,6 +153,7 @@ class OneQuery:
             COMPUTATION_END: 0,
             CQ_DMA_END: 0,
             POLLING_END: 0,
+            POLLING_END_DONE: 0,
             DISTANCE_END: 0,
             UPDATE_END: 0,
             TRAVERSE_END: 0,
@@ -173,6 +171,7 @@ class OneQuery:
             QUERY_SET: 0,
             DISTANCE_START: 0,
             SEND_DOORBELL: 0,
+            SEND_DOORBELL_DONE: 0,
             RECV_DOORBELL: 0,
             RECV_SQ: 0,
             GET_QUERY_VECTOR_START: 0,
@@ -180,6 +179,7 @@ class OneQuery:
             COMPUTATION_END: 0,
             CQ_DMA_END: 0,
             POLLING_END: 0,
+            POLLING_END_DONE: 0,
             DISTANCE_END: 0,
             UPDATE_END: 0,
             TRAVERSE_END: 0,
@@ -204,6 +204,7 @@ class OneQuery:
             elif self.timestamps[TRAVERSE_END] == 0:
                 self.ticks["graph"] += self.timestamps[DISTANCE_START] - self.timestamps[UPDATE_END]
                 self.ticks["update"] += timestamp - self.timestamps[DISTANCE_END]
+                # self.ticks["submission"] += self.timestamps[SEND_DOORBELL_DONE] - self.timestamps[DISTANCE_START]
             else:
                 self.ticks["graph"] += self.timestamps[TRAVERSE_END] - self.timestamps[UPDATE_END]
                 self.ticks["update"] += timestamp - self.timestamps[TRAVERSE_END]
@@ -230,7 +231,7 @@ class OneQuery:
                 if OUTLIER_THRESHOLD < self.timestamps[POLLING_END] - min(self.timestamps[CQ_DMA_END], self.timestamps[POLLING_END]):
                     print(f'{timestamp}: {self.timestamps[POLLING_END] - self.timestamps[CQ_DMA_END]}')
 
-            if  self.timestamps[DISTANCE_START] < self.first_doorbell:
+            if self.timestamps[DISTANCE_START] < self.first_doorbell:
                 self.ticks["accumulation"] += self.timestamps[DISTANCE_END] - self.timestamps[POLLING_END]
         else:
             if self.timestamps[SET_START] != 0:

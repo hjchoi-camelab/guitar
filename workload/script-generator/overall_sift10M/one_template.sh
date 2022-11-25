@@ -2,8 +2,8 @@
 set -x
 
 # TYPE list
-BASE_LIST=( "base" "ndp" "cache" "nearest" )
-NDP_LIST=( "ndp" "cache" "nearest" )
+BASE_LIST=( "base" "ndp" "cache" "nearest" "infinite" )
+NDP_LIST=( "ndp" "cache" "nearest" "infinite" )
 CACHE_LIST=( "cache" "nearest" )
 NEAREST_LIST=( "nearest" )
 
@@ -11,19 +11,31 @@ NEAREST_LIST=( "nearest" )
 DATASET=%{DATASET}
 SEARCH_L=%{SEARCH_L}
 TYPE=%{TYPE}
+CACHE_BUDGET=%{CACHE_BUDGET}
 export OMP_NUM_THREADS=%{OMP_NUM_THREADS}
 export OMP_DISPLAY_ENV=VERBOSE
 
 echo ${DATASET}_${SEARCH_L}_${TYPE}
 
-BUILD_R=""
-BUILD_L=""
-BUILD_C=""
-if [ "${DATASET}" == "gist1M" ]
+if [ "${DATASET}" == "sift1M" ]
 then
-  BUILD_R="--build-r 70"
-  BUILD_L="--build-l 60"
-  BUILD_C="--build-c 500"
+  BUILD_R=50
+  BUILD_L=40
+  BUILD_C=500
+elif [ "${DATASET}" == "gist1M" ]
+then
+  BUILD_R=70
+  BUILD_L=60
+  BUILD_C=500
+elif [ "${DATASET}" == "sift10M" ]
+then
+  BUILD_R=100
+  BUILD_L=60
+  BUILD_C=500
+else
+  BUILD_R=-1
+  BUILD_L=-1
+  BUILD_C=-1
 fi
 
 # script to execute
@@ -49,7 +61,7 @@ GRAPH_TYPE=""
 if [ "${TYPE}" == "disk" ];
 then
   BINARY=test_diskann
-  CACHE_BUDGET_MB="--cache-budget-mb 128"
+  CACHE_BUDGET_MB="--cache-budget-mb ${CACHE_BUDGET}"
 fi
 
 # distributed
@@ -58,7 +70,7 @@ then
   GRAPH_LOCATION="--graph-location host"
   EMBEDDING_LOCATION="--embedding-location host"
   SHARD="--shard distributed"
-  NUM_SHARD="--num-shard 5"
+  NUM_SHARD="--num-shard 3"
 fi
 
 # enable cxl
@@ -68,8 +80,8 @@ then
   EMBEDDING_LOCATION="--embedding-location cxl"
   DEVICE_NAME="--device-name jh"
   SHARD="--shard column"
-  NUM_SHARD="--num-shard 4"
-  DEVICE_IDS="--device-ids 1 2 3 4"
+  NUM_SHARD="--num-shard 8"
+  DEVICE_IDS="--device-ids 0 1 2 3 4 5 6 7"
 fi
 
 # enable ndp
@@ -83,7 +95,7 @@ fi
 if [[ " ${CACHE_LIST[*]} " =~ " ${TYPE} " ]];
 then
   PREFETCH="--prefetch 1"
-  CACHE_BUDGET_MB="--cache-budget-mb 128"
+  CACHE_BUDGET_MB="--cache-budget-mb ${CACHE_BUDGET}"
   GRAPH_TYPE="--graph-type cacheline"
 fi
 
@@ -97,18 +109,18 @@ fi
 if [ "${TYPE}" == "infinite" ];
 then
   GRAPH_LOCATION="--graph-location host"
-  EMBEDDING_LOCATION="--embedding-location host"
-  SHARD="--shard none"
-  NUM_SHARD="--num-shard 1"
+  EMBEDDING_LOCATION="--embedding-location cxl"
+  PREFETCH="--prefetch 1"
+  GRAPH_TYPE="--graph-type cacheline"
 fi
 
 mount /dev/sdb1 /root/mnt
 
 /root/mnt/${BINARY} \
   ${DATASET_ROOT}/${DATASET} ${INDEX_ROOT} \
-  ${BUILD_R} \
-  ${BUILD_L} \
-  ${BUILD_C} \
+  --build-r ${BUILD_R} \
+  --build-l ${BUILD_L} \
+  --build-c ${BUILD_C} \
   --dataset-mode ${DATASET_MODE} \
   --search-l ${SEARCH_L} \
   --num-query ${NUM_QUERY} \
